@@ -1,110 +1,119 @@
-
 # 🤖 Fluxos n8n – Assistente Virtual Imobiliária (WhatsApp + IA)
 
-Este repositório reúne os workflows do **n8n** usados para automatizar o atendimento imobiliário via **WhatsApp**, com:
+Este repositório reúne os workflows do **n8n** usados para automatizar o atendimento de uma imobiliária via **WhatsApp**, combinando:
 
-- Assistente virtual (Nina) usando IA
+- Assistente virtual (Nina) com IA
 - Qualificação automática de leads (frio, morno, quente, score 0–100)
-- Registro de leads no **Supabase**
+- Registro de leads em **Supabase**
 - Painel de acompanhamento em **Google Sheets**
+- Regras em JavaScript para reduzir consumo de tokens de IA
 
-O objetivo é mostrar, na prática, como usar **low-code + IA** para criar um funil de atendimento profissional para o mercado imobiliário.
+O objetivo é mostrar, na prática, como usar **low-code + IA** para criar um funil de atendimento profissional no mercado imobiliário.
 
 ---
 
 ## 🧩 Visão Geral do Fluxo
 
-Fluxo principal (exemplo):
+Fluxo principal (exemplo simplificado):
 
-1. **WhatsApp Trigger**  
-   Recebe a mensagem do cliente (via WhatsApp Cloud API).
+1. **WhatsApp Trigger (Meta / WhatsApp Cloud API)**  
+   Recebe mensagens de clientes que buscam imóveis.
 
-2. **IA (Nina – atendente virtual)**  
-   - Lê histórico da conversa  
-   - Responde de forma humana, curta e direta  
-   - Avança a qualificação (compra/aluguel, bairro, tipo, orçamento, prazo)
+2. **Nina – Atendente Virtual (IA)**  
+   - Responde em tom humano, curto e direto  
+   - Faz perguntas para qualificar:  
+     - Compra ou aluguel  
+     - Cidade / bairro  
+     - Tipo de imóvel  
+     - Orçamento  
+     - Prazo para mudar  
 
-3. **Qualificação de Lead (Function / JS)**  
-   - Analisa o texto completo  
+3. **Qualificação de Lead (Node Function – JS, sem IA)**  
+   - Analisa todo o histórico da conversa  
+   - Detecta sinais de interesse  
    - Gera:
      - `resumo` da conversa  
-     - `temperatura` (frio, morno, quente)  
-     - `score` (0–100)  
+     - `temperatura` do lead: `frio`, `morno`, `quente`  
+     - `score` (0–100) baseado em interesse, intenção, localização, orçamento, prazo  
      - `dados_importantes` (nome, necessidades, orçamento, prazo, dores)  
-     - `proximos_passos` para time de vendas  
+     - `proximos_passos` sugeridos para o time de vendas  
 
-4. **Prepare Lead Data (Function / JS)**  
-   - Junta:
+4. **Prepare Lead Data (Node Function – JS)**  
+   - Centraliza as informações:
      - telefone (WhatsApp)  
-     - nome (IA + perfil do WhatsApp)  
-     - resumo + temperatura + score  
-   - Monta o objeto final do lead para salvar e enviar ao painel.
+     - nome (IA ou perfil do WhatsApp)  
+     - resumo, temperatura e score  
+   - Monta o objeto final do lead para salvar no Supabase e enviar ao painel.
 
 5. **Supabase – Create Lead**  
-   - Salva o lead em uma tabela (`leads` ou similar):
-     - telefone  
-     - nome  
-     - resumo  
-     - temperatura  
-     - score  
-     - origem (`whatsapp`)  
-     - status inicial (`novo`)  
+   - Salva o lead em uma tabela, por exemplo `leads`:
+     - `telefone`  
+     - `nome`  
+     - `resumo`  
+     - `temperatura`  
+     - `score`  
+     - `origem` (ex.: `whatsapp`)  
+     - `status` (ex.: `novo`)  
 
-6. **Google Sheets – Dashboard**  
-   - Adiciona uma linha com:
-     - lead_id (nome)  
-     - telefone  
-     - status  
-     - temperatura  
-     - score  
-     - resumo da conversa  
-     - próximos passos / observações  
+6. **Google Sheets – Dashboard de Leads**  
+   - Cria uma linha no painel com:
+     - `lead_id` (nome da pessoa)  
+     - `telefone`  
+     - `status`  
+     - `temperatura`  
+     - `score`  
+     - `resumo` da conversa  
+     - `proximos_passos`  
 
 ---
 
-## 📂 Estrutura de Pastas Sugerida
+## 📂 Estrutura deste Repositório
 
 ```bash
 .
 ├─ workflows/
-│  ├─ vistalar-nina-atendimento-whatsapp.json
-│  ├─ vistalar-nina-qualificacao-leads.json
-│  └─ vistalar-nina-dashboard-google-sheets.json
+│  └─ atendimento-nina-whatsapp.json   # Workflow exportado do n8n
 │
 ├─ docs/
-│  ├─ fluxo-geral.md          # Explicação passo a passo dos nodes
-│  ├─ mapeamento-variaveis.md # Campos usados (telefone, resumo, score etc.)
-│  └─ credenciais-exemplo.md  # O que precisa configurar no n8n
+│  ├─ fluxo-geral.md                   # Explica cada parte do fluxo
+│  ├─ mapeamento-variaveis.md          # Quais campos são usados em cada node
+│  └─ instrucoes-importacao.md         # Como importar o .json no n8n
 │
 ├─ assets/
-│  ├─ prints-fluxo.png        # Prints do fluxo no n8n
-│  └─ exemplo-sheet.png       # Print do painel no Google Sheets
+│  ├─ fluxo-n8n.png                    # Print do fluxo dentro do n8n
+│  └─ dashboard-google-sheets.png      # Print da planilha de leads
 │
+├─ .gitignore
 └─ README.md
 
 
-Você pode adaptar os nomes dos arquivos .json conforme for exportando seus fluxos do n8n.
 
-🧪 Como Importar os Workflows no n8n
+🧪 Como Importar o Workflow no n8n
+
+Veja o passo a passo detalhado em docs/instrucoes-importacao.md
+, mas o resumo é:
 
 Abra o n8n (Cloud, Desktop ou Docker).
 
-Vá em Workflows → Import from File (ou “Import”).
+Vá em Workflows → Import from File.
 
-Selecione um dos arquivos em workflows/
-Ex.: vistalar-nina-atendimento-whatsapp.json
+Selecione workflows/atendimento-nina-whatsapp.json.
 
-Clique em Import.
+Ajuste as credenciais:
 
-Ajuste as credenciais (WhatsApp, Supabase, Google Sheets, OpenAI).
+WhatsApp Cloud API
+
+Supabase
+
+Google Sheets
+
+OpenAI / n8n AI Agent (se estiver usando IA)
 
 Salve e ative o workflow.
 
-Repita o processo para cada .json.
+🔐 Dependências & Credenciais
 
-🔐 Credenciais / Configuração Necessária
-
-Para rodar tudo, você precisa configurar no n8n:
+Para rodar o fluxo completo, você precisa configurar no n8n:
 
 WhatsApp Cloud API
 
@@ -112,7 +121,7 @@ Access Token
 
 Phone Number ID
 
-Webhook configurado no Meta
+Webhook configurado no painel da Meta
 
 Supabase
 
@@ -120,145 +129,68 @@ URL do projeto
 
 API Key
 
-Nome da tabela (leads, lead_memory, etc.)
+Tabela de leads (ex.: leads)
+
+Tabela de memória (opcional, ex.: lead_memory)
 
 Google Sheets
 
-Credencial OAuth / Service Account
+Credenciais de acesso (OAuth ou Service Account)
 
-Planilha criada para o painel
+Planilha com colunas como:
+lead_id, telefone, status, temperatura, score, resumo, proximos_passos
 
-Aba com colunas:
-lead_id, telefone, status, temperatura, score, resumo, proximos_passos (por exemplo)
+OpenAI / IA Agent (opcional)
 
-OpenAI / IA Agent
+API Key
 
-API Key (se usar OpenAI diretamente)
+Modelo configurado (ex.: gpt-4.x ou outro compatível)
 
-Model configurado no node de IA (ex.: gpt-4.x ou similar)
+⚠ Este repositório não inclui nenhuma credencial.
+Use apenas variáveis de ambiente e credenciais internas do n8n.
 
-Prompt da Nina configurado como “System / Instructions”
+🧠 Lógica de Qualificação (sem IA)
 
-💡 Este repositório não contém nenhuma credencial sensível.
-Use variáveis de ambiente ou credenciais do próprio n8n.
+A qualificação de leads é feita com regras em JavaScript dentro de um node Function, para evitar gasto de tokens quando não é necessário.
 
-🧠 Principais Regras de Qualificação (JS)
+Exemplos de critérios:
 
-A qualificação (sem IA) usa regras como:
+Lead quente:
 
-Palavras de forte interesse:
-“quero fechar”, “mandar proposta”, “agendar visita” → lead quente
+Fala em “fechar”, “mandar proposta”, “agendar visita”
 
-Interesse médio:
-“tenho interesse”, “gostei”, “me manda mais detalhes” → lead morno
+Tem orçamento e prazo bem definidos
 
-Baixo interesse / pesquisa:
-“só pesquisando”, “depois vejo”, “sem compromisso” → lead frio
+Lead morno:
 
-Com base nisso, o script gera:
+Demonstra interesse, faz perguntas, mas ainda está avaliando
+
+Lead frio:
+
+Diz que está “só pesquisando”, “vendo por enquanto”, “talvez no futuro”
+
+A partir disso o fluxo define:
 
 temperatura: frio | morno | quente
 
-score: base 20 + pontos por interesse, intenção, bairro, cidade, orçamento, prazo
+score: base 20 + pontos por intenção, tipo, localização, orçamento, prazo
 
-Isso evita gastar tokens com IA e mantém o fluxo rápido e estável.
+📊 Exemplo de Linha no Dashboard (Google Sheets)
 
-🧾 Exemplo de Campos Enviados pro Google Sheets
+Cada lead pode gerar uma linha como:
 
-Cada linha da planilha pode conter, por exemplo:
-
-lead_id → nome do cliente (extraído do texto ou do perfil do WhatsApp)
-
-telefone → número do WhatsApp
-
-status → novo, em atendimento, qualificado, etc.
-
-temperatura → FRIO | MORNO | QUENTE
-
-score → 0–100
-
-resumo → resumo curto da conversa
-
-proximos_passos → sugestão gerada pelo fluxo para o time comercial
-
-🧩 Tecnologias & Stack
+lead_id	telefone	status	temperatura	score	resumo	proximos_passos
+João	551199999…	novo	QUENTE	88	Cliente quer alugar apto no bairro X.	Entrar em contato hoje, enviar opções de apartamentos.
+🧩 Tecnologias Utilizadas
 
 n8n – Orquestração e automações
 
-WhatsApp Cloud API – Canal de atendimento
+WhatsApp Cloud API – Canal de entrada dos leads
 
-OpenAI / n8n AI – Atendente virtual (Nina)
+Supabase – Banco de dados (leads, memória do cliente)
 
-Supabase – Banco de dados de leads e memória
+Google Sheets – Dashboard de acompanhamento
 
-Google Sheets – Painel de acompanhamento
+OpenAI / n8n AI Agent – Assistente virtual (Nina)
 
-JavaScript (Function Nodes) – Regras de qualificação sem IA
-
-🏷 Sugestão de Tópicos (Tags) para o GitHub
-
-No repositório do GitHub, você pode adicionar estes tópicos:
-
-n8n
-
-workflow-automation
-
-whatsapp-bot
-
-imobiliaria
-
-real-estate
-
-chatbot
-
-lead-qualification
-
-openai
-
-supabase
-
-google-sheets
-
-low-code
-
-no-code
-
-ai-assistant
-
-🚀 Sobre este projeto
-
-Este repositório nasceu da prática de construir um fluxo completo de atendimento imobiliário com IA, usando n8n, focado em:
-
-Aprender na prática automações low-code
-
-Aplicar IA de forma útil (não só “bonita”)
-
-Criar algo que poderia ser usado em uma empresa real
-
-Sinta-se à vontade para clonar, adaptar e evoluir estes workflows.
-Sugestões e melhorias são super bem-vindas. 🙌
-
-
----
-
-## 2️⃣ Estrutura de pastas (resumo visual rápido)
-
-Você pode criar essa estrutura no seu repositório:
-
-```bash
-n8n-imobiliaria-workflows/
-├─ workflows/
-│  ├─ atendimento-whatsapp-nina.json
-│  ├─ qualificacao-leads-regra.json
-│  └─ painel-google-sheets.json
-│
-├─ docs/
-│  ├─ fluxo-geral.md
-│  ├─ mapeamento-variaveis.md
-│  └─ credenciais-exemplo.md
-│
-├─ assets/
-│  ├─ fluxo-n8n.png
-│  ├─ exemplo-planilha.png
-│
-└─ README.md
+JavaScript (Function Nodes) – Regras de qualificação e preparação de dados

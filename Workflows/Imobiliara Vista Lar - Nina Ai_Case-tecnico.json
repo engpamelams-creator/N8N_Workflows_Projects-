@@ -1,0 +1,744 @@
+{
+  "name": "Imobiliara Vista Lar - Nina Ai_Case-tecnico",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {
+          "messageStatusUpdates": [
+            "all"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        -496
+      ],
+      "id": "875c2cee-1e3d-4cfb-912a-a2bd27e51148",
+      "name": "WhatsApp Trigger",
+      "webhookId": "0013eede-e61b-4aaa-9e34-595e6b8c4f32",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "7IddWbuPS98SZ3Em",
+          "name": "WhatsApp OAuth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=942712215581580\n",
+        "recipientPhoneNumber": "={{ $node[\"WhatsApp Trigger\"].json[\"messages\"][0][\"from\"] }}\n",
+        "textBody": "={{ $json[\"output\"] }}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        3040,
+        -576
+      ],
+      "id": "cc800dc0-cfa3-49b7-bfcb-44dde7a4928b",
+      "name": "Send message",
+      "webhookId": "a328ca19-d3a4-41e5-a8d7-8b19d8befa13",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "XyuoyYz6xG2lhQIQ",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "obrigado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "98c4ce01-4f09-470c-b2d7-e122969170d4"
+                  },
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "só isso",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "cd1c5bc6-af6c-4ab8-b37c-03441beeac4f"
+                  },
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "finalizar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "75797bf5-6a6a-49b9-8d88-9f9be5ebff6b"
+                  },
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "encerrar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "4c23ff65-f492-4822-a721-25e67c8a87e0"
+                  },
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "tchau",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "4d894dcd-9cf2-48f5-afae-72056afe4b0a"
+                  },
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "até logo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "088bebf4-7a61-4ab9-96bd-306dcfb06fe9"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "Conversation Ended"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "1572cbed-afe7-4a4c-9c56-0d0f8a31698e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Continue Conversation"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": 0,
+          "ignoreCase": true
+        }
+      },
+      "id": "e37b3e5c-f98d-4123-8d26-99c769e0dd30",
+      "name": "Check Conversation Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        3008,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARSE DO AGENTE DE IA — VERSÃO ROBUSTA\n// --------------------------------------\n// Este nó garante que SEMPRE retorne:\n// resumo, temperatura, score, motivo_classificacao,\n// dados_importantes, proximos_passos\n// Mesmo se o modelo enviar JSON quebrado.\n\n// Pega todos os itens anteriores\nconst items = $input.all();\nconst results = [];\n\nfunction tryExtractJSON(text) {\n  try {\n    // Remove qualquer texto antes/depois do JSON\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (!jsonMatch) return null;\n    return JSON.parse(jsonMatch[0]);\n  } catch {\n    return null;\n  }\n}\n\nfor (const item of items) {\n  try {\n    // 1. Tenta acessar a resposta do agente\n    let response = item.json.output || item.json.text || item.json;\n\n    // 2. Garante que estamos trabalhando com string\n    if (typeof response !== \"string\") {\n      response = JSON.stringify(response);\n    }\n\n    // 3. Tenta extrair JSON limpo\n    let parsed = tryExtractJSON(response);\n\n    // 4. Se falhar, cria objeto padrão\n    if (!parsed || typeof parsed !== \"object\") {\n      parsed = {};\n    }\n\n    // 5. Monta o objeto final SEMPRE com todos os campos\n    const leadData = {\n      resumo: parsed.resumo || \"Conversa muito curta ou sem detalhes.\",\n      temperatura: parsed.temperatura || \"frio\",\n      score: parsed.score ?? 0,\n      motivo_classificacao: parsed.motivo_classificacao || \"\",\n      dados_importantes: parsed.dados_importantes || {\n        nome: \"\",\n        empresa: \"\",\n        necessidades: \"\",\n        orcamento: \"\",\n        prazo: \"\",\n        dores: \"\"\n      },\n      proximos_passos: parsed.proximos_passos || \"\"\n    };\n\n    // 6. Adiciona aos resultados\n    results.push({ json: leadData });\n\n  } catch (err) {\n    // 7. Caso erro, retorna fallback seguro\n    results.push({\n      json: {\n        resumo: \"Erro ao interpretar resposta do agente.\",\n        temperatura: \"frio\",\n        score: 0,\n        motivo_classificacao: \"\",\n        dados_importantes: {},\n        proximos_passos: \"\",\n        error: err.message\n      }\n    });\n  }\n}\n\nreturn results;\n"
+      },
+      "id": "57f52248-e8d8-4df1-a525-a8deeb027e39",
+      "name": "Parse Lead Qualification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3872,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PREPARE LEAD DATA\n// Centraliza tudo que vai para Supabase e Google Sheets\n\nreturn $input.all().map(item => {\n  const qual = item.json || {};\n\n  // 1) Dados do WhatsApp Trigger (telefone e nome de perfil)\n  const trigger = $node[\"WhatsApp Trigger\"].json || {};\n  const telefoneTrigger = trigger?.messages?.[0]?.from || null;\n  const nomePerfil = trigger?.contacts?.[0]?.profile?.name || null;\n\n  // 2) Telefone (obrigatório para Supabase)\n  const telefone = qual.telefone || telefoneTrigger || \"\";\n\n  // 3) Nome (IA -> perfil do Whats)\n  const nome =\n    qual?.dados_importantes?.nome ||\n    nomePerfil ||\n    null;\n\n  // 4) RESUMO da conversa (vários fallbacks)\n  let resumo = qual.resumo || \"\";\n\n  // se o nó de qualificação não tiver criado resumo,\n  // tenta pelo campo \"necessidades\"\n  if (!resumo && qual.dados_importantes?.necessidades) {\n    resumo = qual.dados_importantes.necessidades;\n  }\n\n  // se ainda não tiver, tenta gerar a partir do histórico bruto (se existir)\n  if (!resumo && qual.history) {\n    let r = String(qual.history).split(/[.!?]/)[0].trim();\n    if (r.length > 200) r = r.slice(0, 200) + \"...\";\n    resumo = r;\n  }\n\n  // fallback final\n  if (!resumo) {\n    resumo = \"Conversa ainda sem detalhes suficientes para resumo.\";\n  }\n\n  // 5) Temperatura\n  let temperatura = qual.temperatura || qual.temperatura_sheet || null;\n  if (!temperatura) {\n    // se por algum motivo não vier, marca como \"frio\" para não ficar vazio\n    temperatura = \"frio\";\n  }\n\n  // 6) SCORE – garante que seja número\n  let score = qual.score;\n\n  if (typeof score === \"string\" && score.trim() !== \"\") {\n    const n = Number(score);\n    if (!isNaN(n)) score = n;\n  }\n\n  if (typeof score !== \"number\" || isNaN(score)) {\n    // se não tiver score, estimar a partir da temperatura\n    if (temperatura.toLowerCase() === \"quente\") {\n      score = 85;\n    } else if (temperatura.toLowerCase() === \"morno\") {\n      score = 60;\n    } else {\n      score = 30;\n    }\n  }\n\n  if (score < 0) score = 0;\n  if (score > 100) score = 100;\n  score = Math.round(score);\n\n  // 7) Monta o objeto final do lead\n  const lead = {\n    telefone,                   // obrigatório\n    nome,                       // nome da pessoa\n    resumo,                     // resumo da conversa\n    temperatura,                // frio/morno/quente\n    score,                      // 0–100\n    motivo_classificacao: qual.motivo_classificacao || null,\n    origem: \"whatsapp\",\n    status: \"novo\",\n  };\n\n  return { json: lead };\n});\n"
+      },
+      "id": "11b2d80d-e308-4beb-9feb-4daef6cb11fc",
+      "name": "Prepare Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4096,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format chat history from Supabase into a context string for the AI agent\nconst items = $input.all();\n\nif (!items || items.length === 0) {\n  return [{\n    json: {\n      chatHistory: \"Nenhum histórico de conversa encontrado.\",\n      currentMessage: \"\"\n    }\n  }];\n}\n\n// Get the messages array from Supabase response\nconst messages = items[0].json;\n\n// Check if messages is an array\nif (!Array.isArray(messages)) {\n  return [{\n    json: {\n      chatHistory: \"Nenhum histórico de conversa encontrado.\",\n      currentMessage: \"\"\n    }\n  }];\n}\n\n// Format each message with role label and content\nconst formattedMessages = messages.map(msg => {\n  const role = msg.direcao === 'nina' ? 'NINA' : 'Cliente';\n  const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString('pt-BR') : '';\n  const content = msg.conteudo || '';\n  \n  return `[${timestamp}] ${role}: ${content}`;\n});\n\n// Combine all messages into a single context string\nconst chatHistory = formattedMessages.join('\\n\\n');\n\n// Get current WhatsApp message\nconst whatsappData = $('WhatsApp Trigger').item.json;\nconst currentMessage = whatsappData?.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body || '';\n\nreturn [{\n  json: {\n    chatHistory: chatHistory,\n    messageCount: messages.length,\n    currentMessage: currentMessage\n  }\n}];"
+      },
+      "id": "ad105903-4e6c-4620-b8ce-881fd62f505f",
+      "name": "Format Chat History for AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -704
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "Automações",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "nome",
+              "keyValue": "nome"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        -704
+      ],
+      "id": "9e873a85-6c59-4f58-b546-369388d2842d",
+      "name": "Publicar",
+      "credentials": {
+        "supabaseApi": {
+          "id": "NfXAnrhleXORJhUn",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=telefone",
+              "condition": "eq",
+              "keyValue": "={{$node[\"WhatsApp Trigger\"].json[\"contacts\"][0][\"wa_id\"]}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3312,
+        -320
+      ],
+      "id": "37b12ec3-76d8-460a-a9e8-cd4b4eb42459",
+      "name": "Get Conversation from Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "NfXAnrhleXORJhUn",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "mensagens",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "atendimento_id",
+              "fieldValue": "00000000-0000-0000-0000-000000000000"
+            },
+            {
+              "fieldId": "direcao",
+              "fieldValue": "cliente"
+            },
+            {
+              "fieldId": "conteudo",
+              "fieldValue": "={{ $json.mensagens.mensagens[0].de }}\n"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2176,
+        -560
+      ],
+      "id": "19918bc1-af54-4dc6-a6b5-9c8c92b62d04",
+      "name": "Salvar",
+      "credentials": {
+        "supabaseApi": {
+          "id": "NfXAnrhleXORJhUn",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "telefone",
+              "fieldValue": "={{ $node[\"WhatsApp Trigger\"].json[\"messages\"][0][\"from\"] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3312,
+        -576
+      ],
+      "id": "5c412739-4ed4-4dd7-8546-b10a59c7ca71",
+      "name": "Save Message to Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "NfXAnrhleXORJhUn",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "telefone",
+              "fieldValue": "={{ $json[\"telefone\"] }}\n"
+            },
+            {
+              "fieldId": "nome",
+              "fieldValue": "={{ $json[\"nome\"] || \"Sem nome\" }}\n"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4320,
+        -512
+      ],
+      "id": "303c7748-2712-4203-95d0-871761820793",
+      "name": "Create Lead in Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "NfXAnrhleXORJhUn",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "=https://docs.google.com/spreadsheets/d/1H_A8BLPYIClObF_emKYniJIavne1o7Ql5XqOPxsLhZo\n",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=Sheets",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $json[\"telefone\"] }}\n",
+            " status": "={{ $node[\"Prepare Lead Data\"].json[\"status\"] }}",
+            " temperatura": "={{ $node[\"Prepare Lead Data\"].json[\"temperatura\"] }}",
+            " score": "={{ $node[\"Prepare Lead Data\"].json[\"score\"] }}",
+            " resumo": "={{ $node[\"Prepare Lead Data\"].json[\"resumo\"] }}",
+            "nome": "={{ $json[\"nome\"] || \"Sem nome\" }}\n"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " status",
+              "displayName": " status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " temperatura",
+              "displayName": " temperatura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " score",
+              "displayName": " score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " resumo",
+              "displayName": " resumo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4528,
+        -512
+      ],
+      "id": "43f5f281-d060-4261-9a32-ef00e9bcfbb0",
+      "name": "Google Sheets Dashboard",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jV9WRXgoCrediBQj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json[\"messages\"][0][\"from\"] }}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2736,
+        -288
+      ],
+      "id": "7b513ec1-7265-4f2f-84e4-8b66ae94b5bd",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2576,
+        -288
+      ],
+      "id": "0b63b019-fb70-4cef-b3c2-9098cb0b51cf",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "ateaTCZV7EnkMish",
+          "name": "video"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// QUALIFICAÇÃO DE LEAD SEM IA (REGRAS)\n// -------------------------------------------\n// Entrada esperada: item.json.history (ou conversation/mensagem/output/sádda)\n// Saída: JSON com resumo, temperatura, score, motivo_classificacao,\n//        dados_importantes e proximos_passos\n\nreturn $input.all().map(item => {\n  // 1) PEGAR O HISTÓRICO DO LEAD\n  const history =\n    item.json.history ||\n    item.json.conversation ||\n    item.json.mensagem ||\n    item.json.output ||\n    item.json.sádda ||\n    \"\";\n\n  const historyStr = String(history).trim();\n  const text = historyStr.toLowerCase();\n\n  // 2) RESUMO SIMPLES (primeira frase, limitado a 200 caracteres)\n  let resumo = historyStr.split(/[.!?]/)[0].trim();\n  if (resumo.length > 200) {\n    resumo = resumo.slice(0, 200) + \"...\";\n  }\n  if (!resumo) {\n    resumo = \"Conversa muito curta ou sem detalhes suficientes para resumo.\";\n  }\n\n  // 3) REGRAS E SINAIS (regex)\n  const forteInteresse = /(fechar|fechamos|contratar|quero comprar|quero fechar|podemos avançar|mandar proposta|visita(r)?|agendar|assinar contrato|fechar negócio)/i;\n  const interesseMedio = /(tenho interesse|gostei|me envia mais detalhes|pode me mandar|quanto custa|qual o valor|formas de pagamento|condições|pode me explicar melhor)/i;\n  const desinteresse = /(só pesquisando|apenas pesquisando|talvez no futuro|sem compromisso|só olhando|depois vejo|mais pra frente)/i;\n\n  const compraRegex = /(compra(r)?|comprar|comprando)/i;\n  const aluguelRegex = /(aluguel|alugar|locação|para alugar)/i;\n\n  const tipoImovelRegex = /(casa|apartamento|apto|kitnet|quitinete|sobrado|cobertura|studio|estúdio|loft|terreno|galpão|sala comercial|salão comercial)/i;\n\n  // cidade/bairro (bem genérico, pode melhorar depois)\n  const cidadeRegex = /(santo andré|santo andre|são bernardo|sao bernardo|são bernardo do campo|sbc|são caetano|sao caetano|diadema|são paulo|sao paulo|sp|abc)/i;\n  const bairroRegex = /(bairro|no|na|em)\\s+([A-Za-zÀ-ÖØ-öø-ÿ\\s]+?)(,|\\.|$)/i;\n\n  const orcamentoRegex = /(orçamento|budget|até|valor máximo|faixa de preço)\\s*([\\d\\.]+ ?(mil|reais|r\\$)?)/i;\n  const prazoCurtoRegex = /(hoje|agora|o quanto antes|essa semana|semana que vem|ainda este mês|mês que vem|urgente)/i;\n  const prazoMedioRegex = /(daqui (uns )?\\d+ meses|nos próximos meses|até o fim do ano|até final do ano)/i;\n\n  // 4) INICIAR SCORE E TEMPERATURA BASE\n  let temperatura = \"frio\";\n  let score = 20; // base\n\n  // Sinais de interesse\n  if (forteInteresse.test(historyStr)) {\n    score += 40;\n  } else if (interesseMedio.test(historyStr)) {\n    score += 25;\n  } else if (desinteresse.test(historyStr)) {\n    score -= 10;\n  }\n\n  // Intenção: compra ou aluguel\n  let intencao = \"\";\n  if (compraRegex.test(historyStr)) {\n    intencao = \"compra\";\n    score += 10;\n  } else if (aluguelRegex.test(historyStr)) {\n    intencao = \"aluguel\";\n    score += 10;\n  }\n\n  // Tipo de imóvel\n  const tipoMatch = historyStr.match(tipoImovelRegex);\n  const tipoImovel = tipoMatch ? tipoMatch[0].toLowerCase() : \"\";\n  if (tipoImovel) {\n    score += 10;\n  }\n\n  // Cidade\n  const cidadeMatch = historyStr.match(cidadeRegex);\n  const cidade = cidadeMatch ? cidadeMatch[0] : \"\";\n  if (cidade) {\n    score += 10;\n  }\n\n  // Bairro\n  const bairroMatch = historyStr.match(bairroRegex);\n  const bairro = bairroMatch ? bairroMatch[2].trim() : \"\";\n  if (bairro) {\n    score += 10;\n  }\n\n  // Orçamento\n  const orcamentoMatch = historyStr.match(orcamentoRegex);\n  const orcamento = orcamentoMatch\n    ? (orcamentoMatch[2] || \"\").trim()\n    : \"\";\n  if (orcamento) {\n    score += 10;\n  }\n\n  // Prazo / urgência\n  let prazo = \"\";\n  if (prazoCurtoRegex.test(historyStr)) {\n    prazo = \"curto prazo\";\n    score += 10;\n  } else if (prazoMedioRegex.test(historyStr)) {\n    prazo = \"médio prazo\";\n    score += 5;\n  }\n\n  // Normalizar score\n  if (score < 0) score = 0;\n  if (score > 100) score = 100;\n\n  // 5) DEFINIR TEMPERATURA A PARTIR DO SCORE\n  if (score >= 75) {\n    temperatura = \"quente\";\n  } else if (score >= 45) {\n    temperatura = \"morno\";\n  } else {\n    temperatura = \"frio\";\n  }\n\n  // 6) EXTRAÇÃO DE OUTRAS INFORMAÇÕES (nome, empresa, dores)\n\n  // Nome: aceita \"meu nome é\", \"me chamo\", \"sou o/a ...\"\n  const nomeRegex = /(meu nome é|me chamo|sou o|sou a)\\s+([A-Za-zÀ-ÖØ-öø-ÿ\\s]+)/i;\n  const nomeMatch = historyStr.match(nomeRegex);\n\n  const empresaMatch = historyStr.match(/(sou da|trabalho na|empresa)\\s+([A-Za-z0-9À-ÖØ-öø-ÿ\\s]+)/i);\n  const dorMatch = historyStr.match(/(problema|dificuldade|dor|desafio)\\s*([^\\.!?]+)/i);\n\n  const nome = nomeMatch?.[2]?.trim() || \"\";\n  const empresa = empresaMatch?.[2]?.trim() || \"\";\n  const dores = dorMatch ? (dorMatch[2] || \"\").trim() : \"\";\n\n  // Necessidades (frase resumida)\n  let necessidades = \"\";\n  if (intencao || tipoImovel || cidade || bairro) {\n    const partes = [];\n    if (intencao) partes.push(intencao);\n    if (tipoImovel) partes.push(tipoImovel);\n    if (bairro) partes.push(`no bairro ${bairro}`);\n    else if (cidade) partes.push(`em ${cidade}`);\n    necessidades = partes.join(\" \");\n  }\n\n  const dados_importantes = {\n    nome,\n    empresa,\n    necessidades,\n    orcamento,\n    prazo,\n    dores,\n  };\n\n  // 7) MOTIVO DA CLASSIFICAÇÃO\n  let motivo = `Score ${score} e classificado como ${temperatura}.`;\n  if (temperatura === \"quente\") {\n    motivo += \" Demonstra forte intenção de avançar (interesse claro e dados relevantes fornecidos).\";\n  } else if (temperatura === \"morno\") {\n    motivo += \" Demonstra interesse, mas ainda faltam informações ou decisão final.\";\n  } else {\n    motivo += \" Demonstra pouco interesse ou está apenas pesquisando.\";\n  }\n\n  // 8) PRÓXIMOS PASSOS\n  let proximos_passos = \"\";\n  if (temperatura === \"quente\") {\n    proximos_passos = \"Entrar em contato rapidamente (telefone ou WhatsApp), confirmar dados e enviar proposta ou opções de imóveis alinhadas ao perfil.\";\n  } else if (temperatura === \"morno\") {\n    proximos_passos = \"Enviar mais informações e opções, responder dúvidas e marcar um próximo contato para avançar na negociação.\";\n  } else {\n    proximos_passos = \"Registrar no CRM, manter em fluxo de nutrição e enviar oportunidades relevantes quando surgirem imóveis compatíveis.\";\n  }\n\n  // 9) Campo extra útil para visualização em planilha\n  const temperatura_sheet = temperatura.toUpperCase(); // FRIO / MORNO / QUENTE\n\n  // 10) RETORNAR O JSON FINAL (MANTENDO CAMPOS EXISTENTES)\n  item.json = {\n    ...item.json,              // mantém id, telefone, etc. que já existiam\n    history: historyStr,       // garante que Prepare Lead Data pode usar se precisar\n    resumo,\n    temperatura,\n    temperatura_sheet,\n    score,\n    motivo_classificacao: motivo,\n    dados_importantes,\n    proximos_passos,\n  };\n\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3648,
+        -512
+      ],
+      "id": "c1641c4a-7baa-4f98-8366-cafffe7b348a",
+      "name": "Qualificação Lead"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Histórico da conversa:\n{{ $json.chatHistory || \"Nenhum histórico anterior\" }}\n\nMensagem atual do cliente:\n{{ $node[\"WhatsApp Trigger\"].json[\"messages\"][0][\"text\"][\"body\"] || \"Mensagem vazia\" }}\n",
+        "options": {
+          "systemMessage": "=Você é NINA, a assistente virtual da imobiliária VistaLar Imóveis, atendendo via WhatsApp.\n\nSua Personalidade: Você é solar, prestativa e age como uma amiga que entende muito de mercado imobiliário. Você não \"atende tickets\", você conversa com pessoas. Seu objetivo é criar uma conexão leve enquanto descobre o que o cliente precisa.\n\nObjetivo Principal:\n\nCriar conexão: Descobrir o nome do cliente logo no início.\n\nQualificar o lead: Coletar de forma natural:\n\nIntenção: COMPRA ou ALUGUEL\n\nLocalização: cidade e/ou bairro\n\nTipo de imóvel (casa, apê, terreno...)\n\nOrçamento aproximado\n\nPrazo para mudança\n\nDiretrizes de Estilo e Tom:\n\nIdioma: Português do Brasil (coloquial, natural).\n\nVibe: Humana, acolhedora, educada e levemente divertida.\n\nEmojis: Use com moderação (máximo 2 por mensagem). 😊🏡\n\nTamanho: Respostas curtas (máximo 3 frases). O texto deve ser fácil de ler no celular.\n\nVocabulário: Evite termos técnicos rígidos (\"Dormitórios\", \"Logradouro\"). Prefira termos do dia a dia (\"Quartos\", \"Rua\", \"Apê\").\n\nConectivos Humanos: Use expressões como \"Entendi\", \"Ah, que legal!\", \"Perfeito\", \"Imagino\".\n\n⚙️ Regras de Comportamento e Lógica\nContexto de Entrada: Você receberá: Histórico: <conversas passadas> | Mensagem: <nova mensagem do cliente>\n\n🚨 REGRA DE OURO (Sincronia):\n\nTurno de Fala Único: Gere apenas UMA resposta para a mensagem atual do cliente.\n\nInteratividade: Nunca envie duas mensagens seguidas sem que o cliente tenha respondido no meio. Aguarde a interação dele.\n\nSem Alucinação: Nunca escreva o texto do \"Cliente\". Escreva apenas a fala da Nina.\n\nCoerência: Se a mensagem do cliente for curta ou sem nexo, tente entender o contexto ou peça gentilmente para ele explicar, sem mudar de assunto bruscamente.\n\n1. Análise Inicial:\n\nLeia o histórico para não repetir perguntas já respondidas.\n\nIdentifique o que o cliente falou na última mensagem e reaja a isso primeiro.\n\n2. Abertura (Se o Histórico estiver vazio):\n\nSe apresente de forma breve e peça o nome da pessoa para iniciar o atendimento de forma personalizada.\n\nExemplo: \"Olá! Sou a Nina, sua assistente por aqui na VistaLar Imóveis 🏡. Antes de começarmos, como posso te chamar?\"\n\n3. Segunda Mensagem (Após o cliente dizer o nome):\n\nAgradeça, use o nome da pessoa (isso gera conexão) e pergunte a intenção (Compra ou Aluguel).\n\nExemplo: \"Prazer, [Nome]! Adoro esse nome 😊. Me conta: hoje você procura um imóvel para COMPRA ou ALUGUEL?\"\n\n4. Fluxo de Qualificação (Mensagens Seguintes):\n\nMantenha o papo fluindo. Responda o que o cliente perguntou e faça APENAS 1 pergunta de qualificação por vez (Local, Tipo, Orçamento ou Prazo).\n\nNunca faça um interrogatório (várias perguntas juntas).\n\nSe o cliente demonstrar pressa ou entusiasmo (\"preciso mudar urgente\", \"adorei esse bairro\"), valide o sentimento: \"Nossa, correria então! Vamos agilizar isso 🙌\".\n\n5. Solicitações Específicas (Fotos, Vídeos, Visitas, Propostas):\n\nSe o cliente pedir para visitar, ver fotos específicas ou negociar valores:\n\nDiga que vai acionar o time de especialistas humanos para enviar os detalhes ou agendar.\n\nSolicite: Nome completo (se ainda não tiver) e Melhor horário para contato.\n\n6. O que NÃO fazer:\n\nNunca diga \"Sou uma IA\" ou \"Sou um robô\". Diga \"sou assistente virtual\".\n\nNunca deixe a conversa morrer. Sempre termine com uma pergunta (exceto no encerramento).\n\nNão use linguagem formal excessiva (\"Prezado senhor\", \"Gostaria de saber\").\n\n7. Critério de Finalização (Handoff): A conversa deve ser encerrada quando:\n\nVocê tiver: Intenção + Local + Tipo + Orçamento (ou o cliente pedir para falar com humano).\n\nO cliente tiver passado o contato para agendamento.\n\n8. Saída de Encerramento:\n\nAgradeça com carinho e informe o próximo passo.\n\nExemplo: \"Combinado, [Nome]! Já anotei tudo aqui. Vou passar para nosso especialista humano e ele te chama rapidinho com opções incríveis. Obrigada pelo papo! 💚\"\n\nAdicione a TAG oculta no final: [FIM_DO_ATENDIMENTO]\n\nExemplos de Fluxo (Para referência da IA):\nCenário 1: Início da conversa\n\nNina: Olá! Sou a Nina, sua assistente aqui na VistaLar Imóveis 😊. Pra gente começar, como posso te chamar?\n\n(A Nina PAUSA e aguarda a resposta do cliente)\n\nCliente: Oi, sou o Carlos.\n\nNina: Prazer, Carlos! Vamos encontrar seu lugar ideal. Você está buscando imóvel para COMPRA ou ALUGUEL?\n\nCenário 2: Cliente direto\n\nNina: (...) como posso te chamar?\n\n(A Nina PAUSA e aguarda a resposta do cliente)\n\nCliente: Quero alugar um apê no centro. Sou a Ana.\n\nNina: Oi, Ana! Entendi, aluguel no Centro é super prático. Você tem preferência por quantos quartos?"
+        }
+      },
+      "id": "c46999f8-983a-49b9-9db3-cac66b578eff",
+      "name": "Nina IA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2624,
+        -512
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Publicar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salvar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Nina IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Conversation Status": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Conversation from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Lead Qualification": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Create Lead in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message": {
+      "main": [
+        [
+          {
+            "node": "Save Message to Supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Conversation Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Chat History for AI": {
+      "main": [
+        [
+          {
+            "node": "Nina IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar": {
+      "main": [
+        [
+          {
+            "node": "Salvar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Chat History for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Qualificação Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar": {
+      "main": [
+        [
+          {
+            "node": "Format Chat History for AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Nina IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Message to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Qualificação Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Lead in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Dashboard": {
+      "main": [
+        []
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Nina IA",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Nina IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualificação Lead": {
+      "main": [
+        [
+          {
+            "node": "Parse Lead Qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nina IA": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Conversation Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d127f55f-bf4b-40ec-9b76-ff497330b464",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3b6c23ed1d67d1203d6394561befceca10159770f11512ce2c24e76ad0f138e3"
+  },
+  "id": "0uDed0eHxYka11Xg",
+  "tags": []
+}
